@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "18939358188",
+    "project_id": "behangapp",
+    "storage_bucket": "behangapp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:18939358188:android:51fd65f3bf6e19a8b16ec9",
+        "android_client_info": {
+          "package_name": "com.behangidea.behangideaapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDJWr1MKwyrRIaTk0rMVK_oxH3N0eKczfE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
