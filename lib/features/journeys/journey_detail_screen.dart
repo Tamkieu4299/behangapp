@@ -17,7 +17,7 @@ import '../../widgets/calendar_grid.dart';
 import '../../widgets/media_thumbnail.dart';
 import '../../widgets/story_player.dart';
 import '../../widgets/streak_badge.dart';
-import '../records/capture_record_screen.dart';
+import '../records/quick_capture_screen.dart';
 import '../recap/recap_player_screen.dart';
 import 'invite_and_join.dart';
 
@@ -419,14 +419,16 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen>
     final journeys = context.read<JourneyController>();
     final scheme = Theme.of(context).colorScheme;
     final members = journeys.membersOf(journey.id);
+    final visibleCount = members.length.clamp(0, 4);
     return Row(
       children: [
         SizedBox(
+          width: visibleCount == 0 ? 0 : (visibleCount - 1) * 22.0 + 28,
           height: 28,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              for (var i = 0; i < members.length && i < 4; i++)
+              for (var i = 0; i < visibleCount; i++)
                 Positioned(
                   left: i * 22.0,
                   child: Container(
@@ -707,7 +709,7 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen>
     await Navigator.push<bool>(
       context,
       MaterialPageRoute<bool>(
-        builder: (_) => CaptureRecordScreen(journeyId: widget.journeyId),
+        builder: (_) => QuickCaptureScreen(journeyId: widget.journeyId),
       ),
     );
   }

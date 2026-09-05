@@ -9,7 +9,7 @@ import '../../state/recap_controller.dart';
 import '../../state/timeline_controller.dart';
 import '../../widgets/media_thumbnail.dart';
 import '../../widgets/streak_badge.dart';
-import '../records/capture_record_screen.dart';
+import '../records/quick_capture_screen.dart';
 import 'create_journey_screen.dart';
 import 'invite_and_join.dart';
 import 'journey_detail_screen.dart';
@@ -200,7 +200,7 @@ class _JourneyCardState extends State<_JourneyCard> {
     await Navigator.push<bool>(
       context,
       MaterialPageRoute<bool>(
-        builder: (_) => CaptureRecordScreen(journeyId: widget.journey.id),
+        builder: (_) => QuickCaptureScreen(journeyId: widget.journey.id),
       ),
     );
     if (mounted) {

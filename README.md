@@ -10,7 +10,7 @@ Behang is a cross-platform (iOS & Android) visual journaling app for capturing d
 |---|---------|-------------|
 | 1 | **Create Journey** | Tracking container for any goal: category (Baby / Fitness / Skill / Travel / Personal / Other), optional goal text, start date, duration (or open-ended). |
 | 2 | **Daily Reminder & Streak Counter** | Configurable per-journey daily push notification time. Streak increments for consecutive days with a record; best streak is tracked too. |
-| 3 | **Daily Record** | Capture photo, video, or note per day. Videos are auto-trimmed to a configurable **1s daily clip** (1s/2s/3s, per-profile setting) on the server-side FFmpeg worker, with a "Day N of …" capture badge. |
+| 3 | **Daily Record** | 1-tap in-app camera: a **video clip auto-records** and stops at the configured length (1s/2s/3s, per-profile), or a quick photo snap — plus an optional note and "Day N of …" badge. Videos are trimmed to the clip length on the server-side FFmpeg worker. On camera-less devices (simulator) it falls back to the gallery/picker flow. |
 | 4 | **Interactive Calendar** | Month grid rendering each day's media thumbnail, decorative emoji stickers (long-press a day), and achievement badge overlays. |
 | 5 | **Visual Timeline / Story Feed** | Journey view is story-first: a scrubbable story player + a minimalist feed of moments grouped by day, with inline media and jump-to-day. |
 | 6 | **Custom Milestones** | User-defined checkpoints with badge emoji, optional target date, achieved date → badges burn into the compiled reel as 9:16 chapters. |

@@ -52,6 +52,7 @@ dependencies:
   firebase_storage: ^12.4.0
   share_plus: ^13.3.0
   http: ^1.6.0
+  camera: ^0.12.1
 
 dev_dependencies:
   flutter_test:
