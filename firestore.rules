@@ -44,7 +44,13 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if isMember(jid);
-        allow write: if isMember(jid);
+        // The members-doc write is validated against the journey's memberIds
+        // *after* the batch applies (getAfter), so the owner can be seeded in
+        // the same atomic batch that creates the journey, and a joiner's own
+        // member doc can be created while their uid is being added to the
+        // journey's memberIds array in that same batch.
+        allow write: if authed()
+          && request.auth.uid in getAfter(/databases/$(database)/documents/journeys/$(jid)).data.memberIds;
       }
 
       match /records/{recordId} {

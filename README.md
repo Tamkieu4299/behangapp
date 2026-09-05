@@ -10,11 +10,11 @@ Behang is a cross-platform (iOS & Android) visual journaling app for capturing d
 |---|---------|-------------|
 | 1 | **Create Journey** | Tracking container for any goal: category (Baby / Fitness / Skill / Travel / Personal / Other), optional goal text, start date, duration (or open-ended). |
 | 2 | **Daily Reminder & Streak Counter** | Configurable per-journey daily push notification time. Streak increments for consecutive days with a record; best streak is tracked too. |
-| 3 | **Daily Record** | Capture photo, video, or note per day. |
+| 3 | **Daily Record** | Capture photo, video, or note per day. Videos are auto-trimmed to a configurable **1s daily clip** (1s/2s/3s, per-profile setting) on the server-side FFmpeg worker, with a "Day N of …" capture badge. |
 | 4 | **Interactive Calendar** | Month grid rendering each day's media thumbnail, decorative emoji stickers (long-press a day), and achievement badge overlays. |
-| 5 | **Visual Timeline** | Chronological feed of all moments grouped by month, with inline video playback and full-screen photo viewer. |
-| 6 | **Custom Milestones** | User-defined checkpoints with badge emoji, optional target date, achieved date → badges appear on the calendar. |
-| 7 | **Recap Slideshow** | Auto-playing recap of a journey's photos with day captions ("Day 12 · August 23"). |
+| 5 | **Visual Timeline / Story Feed** | Journey view is story-first: a scrubbable story player + a minimalist feed of moments grouped by day, with inline media and jump-to-day. |
+| 6 | **Custom Milestones** | User-defined checkpoints with badge emoji, optional target date, achieved date → badges burn into the compiled reel as 9:16 chapters. |
+| 7 | **Recap Stories & Reel** | Auto-playing recap with day captions ("Day 12 · August 23"), swipeable/scrubbable stories mode, looping preview reels on each Home card, and an exportable 1080×1920 reel (blurred 9:16 background, Day N overlay, milestone chapters, watermark end-card) compiled server-side by a FFmpeg worker for Instagram/TikTok. |
 
 ## Tech Stack
 
@@ -39,8 +39,10 @@ Both modes share one UI through a `Backend` abstraction (`lib/core/backend/`).
 
 Photos & videos go through a `MediaStore` interface — keys are identical for both, so switching is one line:
 
-- **MinIO via Docker** (default dev setup): `infra/` runs MinIO + a tiny presign service. No paid Firebase plan needed. Enabled with `--dart-define=MEDIA_STORE=minio --dart-define=UPLOAD_API=http://localhost:9010`.
+- **MinIO via Docker** (default dev setup): `infra/` runs MinIO + a presign service + a FFmpeg **reel worker** (trims clips and compiles 1080×1920 reels from already-uploaded media). No paid Firebase plan needed. Enabled with `--dart-define=MEDIA_STORE=minio --dart-define=UPLOAD_API=http://localhost:9010 --dart-define=REEL_API=http://localhost:9011`.
 - **Firebase Storage**: needs the **Blaze** (pay-as-you-go) plan. This is `MEDIA_STORE=firebase` (the default) — just drop the dart-defines when you upgrade.
+
+**Reel pipeline is server-side** (`infra/reel-worker`, ports + MinIO): the app uploads raw media, `POST /reel/trim` shortens each captured video to the clip setting, and `POST /reel/build` stitches all clips into `reels/<journeyId>/…mp4` with the blurred 9:16 background, "Day N" + milestone overlays, and optional "Made with Behang" end-card. The finished reel is downloaded back to the device for playback/sharing. There is **no FFmpeg binary in the app** (no ffmpeg-kit dependency, no LGPL, no per-platform binary downloads).
 
 ## Getting Started
 
@@ -107,22 +109,25 @@ Restart the app — it detects the config and switches to cloud mode automatical
 
 ```
 lib/
-├── main.dart                 # App bootstrap
+├── main.dart                 # Wiring: Backend + MultiProvider (Journey/Timeline/Recap)
 ├── app.dart                  # MaterialApp + theme wiring
-├── app_state.dart            # Global store (ChangeNotifier + repositories)
+├── state/
+│   ├── journey_controller.dart    # profile, journeys, members, invites
+│   ├── timeline_controller.dart   # records/milestones/stickers + memoized streaks
+│   └── recap_controller.dart      # reel previews, watch-together sync + worker reel API
 ├── core/
 │   ├── backend/              # Backend abstraction: LocalBackend ↔ CloudBackend (Firebase)
 │   ├── db/app_database.dart  # SQLite schema (offline mode + local cache)
 │   ├── models/               # Journey, RecordEntry, Milestone, DaySticker, Member, Profile
 │   ├── repos/                # Local repositories used by LocalBackend
-│   ├── services/             # Streak engine, notifications, media, theme
+│   ├── services/             # Streak engine, AppSettings, reel API, notifications, media, theme
 │   └── utils/
 ├── features/
-│   ├── journeys/             # List, create, detail, invite & join flows
-│   ├── profile/              # Sign-in / profile sheet
-│   ├── records/              # Capture screen
-│   └── recap/                # Recap player with watch-together sync
-└── widgets/                  # Calendar grid, timeline, thumbnails, video player
+│   ├── journeys/             # List (reel-preview cards), create, detail (story-first), invite & join
+│   ├── profile/              # Sign-in / profile sheet (clip-length setting)
+│   ├── records/              # 1-tap capture screen (auto-trim clips)
+│   └── recap/                # Dual-mode recap player (stories + reel) with export
+└── widgets/                  # Calendar grid, story player, thumbnails, timeline, video player
 ```
 
 ## Roadmap

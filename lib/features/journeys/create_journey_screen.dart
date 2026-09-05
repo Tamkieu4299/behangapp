@@ -4,8 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../app_state.dart';
 import '../../core/models/journey.dart';
+import '../../state/journey_controller.dart';
 
 class CreateJourneyScreen extends StatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -192,7 +192,7 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
 
     final goal = _goalController.text.trim();
     if (!mounted) return;
-    final state = context.read<AppState>();
+    final journeys = context.read<JourneyController>();
     final journey = Journey(
       id: const Uuid().v4(),
       userId: userId,
@@ -206,7 +206,7 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
       createdAt: DateTime.now(),
     );
 
-    await state.createJourney(journey);
+    await journeys.createJourney(journey);
     if (!mounted) return;
     Navigator.pop(context);
   }

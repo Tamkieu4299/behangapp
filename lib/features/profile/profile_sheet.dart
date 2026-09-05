@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app_state.dart';
 import '../../core/backend/backend.dart' show UserProfile;
+import '../../core/services/app_settings.dart';
+import '../../state/journey_controller.dart';
+import '../../state/recap_controller.dart';
 
 const _avatarChoices = [
   '🌱', '🍼', '💪', '🎾', '✈️', '⭐', '🔥', '🐼', '🌸', '🎸', '🐳', '🦊',
@@ -26,6 +28,22 @@ class _ProfileSheetState extends State<ProfileSheet> {
   String? _error;
   bool _formInitialized = false;
 
+  double _clipSeconds = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.loadClipSeconds().then((seconds) {
+      if (mounted) setState(() => _clipSeconds = seconds);
+    });
+  }
+
+  void _setClipSeconds(double seconds) {
+    setState(() => _clipSeconds = seconds);
+    AppSettings.setClipSeconds(seconds);
+    context.read<RecapController>().refreshClipSeconds();
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -41,7 +59,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
     _avatar = profile.avatar;
   }
 
-  Future<void> _submitAuth(AppState state) async {
+  Future<void> _submitAuth(JourneyController state) async {
     setState(() {
       _busy = true;
       _error = null;
@@ -64,7 +82,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
     }
   }
 
-  Future<void> _saveLocalProfile(AppState state) async {
+  Future<void> _saveLocalProfile(JourneyController state) async {
     await state.updateProfile(UserProfile(
       uid: state.profile?.uid ?? 'local-user',
       displayName:
@@ -76,7 +94,7 @@ class _ProfileSheetState extends State<ProfileSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<JourneyController>();
     final scheme = Theme.of(context).colorScheme;
     final profile = state.profile;
     if (profile != null) _fillFromProfile(profile);
@@ -126,6 +144,35 @@ class _ProfileSheetState extends State<ProfileSheet> {
               controller: _nameController,
               decoration: const InputDecoration(labelText: 'Display name'),
               textCapitalization: TextCapitalization.words,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Daily clip length',
+              style: Theme.of(context).textTheme.labelMedium,
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<double>(
+                segments: [
+                  for (final seconds in AppSettings.clipChoices)
+                    ButtonSegment(
+                      value: seconds,
+                      label: Text('${seconds.toStringAsFixed(0)}s'),
+                    ),
+                ],
+                selected: {_clipSeconds},
+                onSelectionChanged: (selection) =>
+                    _setClipSeconds(selection.first),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 4),
+              child: Text(
+                'New videos are trimmed to this length and appended to your recaps.',
+                style: TextStyle(
+                    fontSize: 11, color: Theme.of(context).colorScheme.outline),
+              ),
             ),
             if (state.cloudReady && profile == null) ...[
               const SizedBox(height: 12),

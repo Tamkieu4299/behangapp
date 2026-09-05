@@ -11,18 +11,20 @@ import '../models/milestone.dart';
 import '../models/record_entry.dart';
 import '../models/sticker.dart';
 import '../services/media_service.dart';
+import '../services/reel_api.dart';
 import 'backend.dart';
 import 'media_store.dart';
 import 'value_stream.dart';
 
 class CloudBackend implements Backend {
-  CloudBackend({MediaStore? mediaStore})
+  CloudBackend({MediaStore? mediaStore, this.reelApi})
       : mediaStore = mediaStore ?? FirebaseMediaStore();
 
   @override
   bool get isCloud => true;
 
   final MediaStore mediaStore;
+  final ReelApi? reelApi;
 
   FirebaseAuth get _auth => FirebaseAuth.instance;
   FirebaseFirestore get _fs => FirebaseFirestore.instance;
@@ -328,9 +330,8 @@ class CloudBackend implements Backend {
     final uid = _uid!;
     final code = _randomCode();
     final journeyRef = _fs.collection('journeys').doc(journey.id);
-    // Sequential (not a batch): each write is committed before the next, so
-    // the members-doc rule (which reads the journey doc via get()) sees it.
-    await journeyRef.set({
+    final batch = _fs.batch();
+    batch.set(journeyRef, {
       'title': journey.title,
       'category': journey.category.name,
       'goal': journey.goal,
@@ -344,15 +345,18 @@ class CloudBackend implements Backend {
       'createdAt': journey.createdAt.millisecondsSinceEpoch,
       'lastActivityAt': DateTime.now().millisecondsSinceEpoch,
     });
-    await journeyRef.collection('members').doc(uid).set(
-          _memberMap(JourneyMember(
-            uid: uid,
-            name: _me?.displayName ?? 'Traveler',
-            avatar: _me?.avatar ?? '🌱',
-            role: JourneyMember.roleOwner,
-          )),
-        );
-    await _fs.collection('invites').doc(code).set({'journeyId': journey.id});
+    batch.set(
+        journeyRef.collection('members').doc(uid),
+        _memberMap(JourneyMember(
+          uid: uid,
+          name: _me?.displayName ?? 'Traveler',
+          avatar: _me?.avatar ?? '🌱',
+          role: JourneyMember.roleOwner,
+        )));
+    batch.set(_fs.collection('invites').doc(code), {'journeyId': journey.id});
+    // All writes commit atomically; the members/{uid} rule below uses
+    // getAfter() so the owner bootstrap is allowed within this same batch.
+    await batch.commit();
   }
 
   Map<String, Object?> _memberMap(JourneyMember member) => {
@@ -391,7 +395,11 @@ class CloudBackend implements Backend {
       }, SetOptions(merge: true));
 
   @override
-  Future<void> addRecord(RecordEntry record, {XFile? mediaFile}) async {
+  Future<void> addRecord(
+    RecordEntry record, {
+    XFile? mediaFile,
+    double? videoTrimSeconds,
+  }) async {
     final entry = record.copyWith(
       authorUid: record.authorUid ?? _me?.uid,
       authorName: record.authorName ?? _me?.displayName,
@@ -400,12 +408,34 @@ class CloudBackend implements Backend {
     String? mediaPath = entry.mediaUrl;
     if (mediaFile != null) {
       final ext = p.extension(mediaFile.path);
-      mediaPath = await mediaStore.upload(
+      final uploaded = await mediaStore.upload(
         journeyId: entry.journeyId,
         id: entry.id,
         extension: ext,
         file: mediaFile,
       );
+      if (uploaded == null) {
+        throw Exception('Media upload did not return a path');
+      }
+      mediaPath = uploaded;
+      // Server-side clip trim (PRD Feature 03): the stored daily clip is
+      // shortened to the configured length. Falls back to the raw clip when
+      // the worker is unreachable.
+      if (videoTrimSeconds != null && entry.mediaType == MediaType.video) {
+        final worker = reelApi;
+        if (worker != null) {
+          try {
+            final trimmed = await worker.trimVideo(
+              mediaKey: uploaded,
+              seconds: videoTrimSeconds,
+            );
+            if (trimmed.isNotEmpty && trimmed != uploaded) {
+              await mediaStore.delete(uploaded);
+              mediaPath = trimmed;
+            }
+          } catch (_) {}
+        }
+      }
     }
     await _recordsRef(entry.journeyId).doc(entry.id).set({
       'journeyId': entry.journeyId,
@@ -599,6 +629,15 @@ class CloudBackend implements Backend {
       return MediaService.resolve(path);
     }
     return mediaStore.resolve(path);
+  }
+
+  @override
+  Future<File?> resolveMediaKey(String key) async {
+    if (key.isEmpty) return null;
+    if (!key.startsWith('journeys/') && !key.startsWith('reels/')) {
+      return MediaService.resolve(key);
+    }
+    return mediaStore.resolve(key);
   }
 
   @override

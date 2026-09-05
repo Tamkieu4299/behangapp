@@ -27,5 +27,19 @@ services:
     depends_on:
       - minio
 
+  reel-worker:
+    build: ./reel-worker
+    restart: unless-stopped
+    environment:
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_BUCKET: behang
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin123
+      PORT: "9011"
+    ports:
+      - "9011:9011"   # FFmpeg reel/trim worker used by the app
+    depends_on:
+      - minio
+
 volumes:
   minio_data:

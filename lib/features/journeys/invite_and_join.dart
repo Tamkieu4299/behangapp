@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../../app_state.dart';
+import '../../state/journey_controller.dart';
 
 class JoinJourneyDialog extends StatefulWidget {
   const JoinJourneyDialog({super.key});
@@ -24,13 +24,13 @@ class _JoinJourneyDialogState extends State<JoinJourneyDialog> {
   }
 
   Future<void> _join() async {
-    final state = context.read<AppState>();
+    final journeys = context.read<JourneyController>();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final journeyId = await state.joinWithCode(_codeController.text);
+      final journeyId = await journeys.joinWithCode(_codeController.text);
       if (!mounted) return;
       if (journeyId == null) {
         setState(() {
@@ -121,9 +121,9 @@ class _InviteSheetState extends State<InviteSheet> {
   }
 
   Future<void> _loadCode() async {
-    final state = context.read<AppState>();
+    final journeys = context.read<JourneyController>();
     try {
-      final code = await state.inviteCode(widget.journeyId);
+      final code = await journeys.inviteCode(widget.journeyId);
       if (mounted) setState(() => _code = code);
     } catch (_) {
       if (mounted) {

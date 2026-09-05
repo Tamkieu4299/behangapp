@@ -32,4 +32,5 @@ fi
 echo "==> Launching the app (r = hot reload, q = quit)"
 flutter run \
   --dart-define=MEDIA_STORE=minio \
-  --dart-define=UPLOAD_API=http://localhost:9010
+  --dart-define=UPLOAD_API=http://localhost:9010 \
+  --dart-define=REEL_API=http://localhost:9011

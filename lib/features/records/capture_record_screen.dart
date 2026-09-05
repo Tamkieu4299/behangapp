@@ -5,8 +5,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../app_state.dart';
 import '../../core/models/record_entry.dart';
+import '../../core/services/app_settings.dart';
+import '../../state/journey_controller.dart';
+import '../../state/timeline_controller.dart';
 
 class CaptureRecordScreen extends StatefulWidget {
   final String journeyId;
@@ -22,6 +24,15 @@ class _CaptureRecordScreenState extends State<CaptureRecordScreen> {
   XFile? _media;
   bool _isVideo = false;
   bool _saving = false;
+  double _clipSeconds = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    AppSettings.loadClipSeconds().then((seconds) {
+      if (mounted) setState(() => _clipSeconds = seconds);
+    });
+  }
 
   @override
   void dispose() {
@@ -34,7 +45,7 @@ class _CaptureRecordScreenState extends State<CaptureRecordScreen> {
     final picked = video
         ? await picker.pickVideo(source: source)
         : await picker.pickImage(source: source, maxWidth: 2048);
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() {
         _media = picked;
         _isVideo = video;
@@ -112,9 +123,15 @@ class _CaptureRecordScreenState extends State<CaptureRecordScreen> {
           : _noteController.text.trim(),
     );
     if (!mounted) return;
-    final state = context.read<AppState>();
+    final timeline = context.read<TimelineController>();
     try {
-      await state.addRecord(entry, mediaFile: _media);
+      await timeline.addRecord(
+        entry,
+        mediaFile: _media,
+        // PRD Feature 03: videos are trimmed server-side to the configured
+        // clip length (falls back to the raw clip if the worker is down).
+        videoTrimSeconds: _isVideo ? _clipSeconds : null,
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -129,8 +146,26 @@ class _CaptureRecordScreenState extends State<CaptureRecordScreen> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final journeys = context.watch<JourneyController>();
+    final journey = journeys.journey(widget.journeyId);
+    final dayLabel = journey == null
+        ? null
+        : 'Day ${journey.dayNumberOn(DateTime.now())} of ${journey.title}';
     return Scaffold(
-      appBar: AppBar(title: const Text('Capture today')),
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Capture today'),
+            if (dayLabel != null)
+              Text(
+                dayLabel,
+                style: TextStyle(
+                    fontSize: 11, color: scheme.onSurfaceVariant),
+              ),
+          ],
+        ),
+      ),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -152,6 +187,16 @@ class _CaptureRecordScreenState extends State<CaptureRecordScreen> {
               ),
             ),
             const SizedBox(height: 8),
+            if (_isVideo && _media != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Center(
+                  child: Text(
+                    '✂️ Video will be trimmed to ${_clipSeconds.toStringAsFixed(1)}s on upload',
+                    style: TextStyle(fontSize: 11, color: scheme.outline),
+                  ),
+                ),
+              ),
             Center(
               child: TextButton.icon(
                 onPressed: _chooseSource,

@@ -76,7 +76,11 @@ abstract class Backend {
   Future<void> setReminder(String journeyId, int? hour, int? minute);
 
   Stream<Map<String, List<RecordEntry>>> get recordsByJourneyStream;
-  Future<void> addRecord(RecordEntry record, {XFile? mediaFile});
+  Future<void> addRecord(
+    RecordEntry record, {
+    XFile? mediaFile,
+    double? videoTrimSeconds,
+  });
   Future<void> deleteRecord(RecordEntry record);
 
   Stream<Map<String, List<Milestone>>> get milestonesByJourneyStream;
@@ -101,6 +105,7 @@ abstract class Backend {
   });
 
   Future<File?> resolveMedia(RecordEntry record);
+  Future<File?> resolveMediaKey(String key);
   Future<void> deleteMedia(RecordEntry record);
 
   String? get currentUserId => null;

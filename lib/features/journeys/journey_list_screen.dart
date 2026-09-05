@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:video_player/video_player.dart';
 
-import '../../app_state.dart';
 import '../../core/models/journey.dart';
 import '../../core/models/record_entry.dart';
+import '../../state/journey_controller.dart';
+import '../../state/recap_controller.dart';
+import '../../state/timeline_controller.dart';
 import '../../widgets/media_thumbnail.dart';
 import '../../widgets/streak_badge.dart';
+import '../records/capture_record_screen.dart';
 import 'create_journey_screen.dart';
 import 'invite_and_join.dart';
 import 'journey_detail_screen.dart';
@@ -16,7 +20,7 @@ class JourneyListScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final state = context.watch<JourneyController>();
     final journeys = state.journeyList;
     return Scaffold(
       appBar: AppBar(
@@ -129,18 +133,89 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _JourneyCard extends StatelessWidget {
+class _JourneyCard extends StatefulWidget {
   final Journey journey;
 
   const _JourneyCard(this.journey);
 
   @override
+  State<_JourneyCard> createState() => _JourneyCardState();
+}
+
+class _JourneyCardState extends State<_JourneyCard> {
+  VideoPlayerController? _preview;
+  bool _loadingPreview = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreview();
+  }
+
+  @override
+  void didUpdateWidget(covariant _JourneyCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.journey.id != widget.journey.id) {
+      _disposePreview();
+      _loadPreview();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposePreview();
+    super.dispose();
+  }
+
+  void _disposePreview() {
+    _preview?.dispose();
+    _preview = null;
+  }
+
+  Future<void> _loadPreview() async {
+    if (_loadingPreview) return;
+    _loadingPreview = true;
+    try {
+      final recap = context.read<RecapController>();
+      final file = await recap.compilePreviewReel(widget.journey.id);
+      if (!mounted || file == null) return;
+      final controller = VideoPlayerController.file(file);
+      await controller.initialize();
+      await controller.setLooping(true);
+      await controller.setVolume(0);
+      if (!mounted) {
+        controller.dispose();
+        return;
+      }
+      setState(() => _preview = controller);
+      controller.play();
+    } catch (_) {
+      // FFmpeg unavailable or media unresolvable — fall back to thumbnail.
+    } finally {
+      _loadingPreview = false;
+    }
+  }
+
+  Future<void> _recordToday() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute<bool>(
+        builder: (_) => CaptureRecordScreen(journeyId: widget.journey.id),
+      ),
+    );
+    if (mounted) {
+      _disposePreview();
+      _loadPreview();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
+    final timeline = context.watch<TimelineController>();
+    final journey = widget.journey;
     final scheme = Theme.of(context).colorScheme;
-    final stats = state.streaks[journey.id];
-    final latest = state.latestByJourney[journey.id];
-    final count = state.counts[journey.id] ?? 0;
+    final stats = timeline.statsOf(journey.id);
+    final latest = timeline.latestOf(journey.id);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -153,108 +228,184 @@ class _JourneyCard extends StatelessWidget {
           ),
         ),
         onLongPress: () => _confirmDelete(context),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            children: [
-              Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildBanner(context, journey, latest),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: scheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      journey.category.emoji,
-                      style: const TextStyle(fontSize: 26),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          journey.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              journey.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              journey.goal ?? journey.category.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  color: scheme.onSurfaceVariant),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          journey.goal ?? journey.category.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                              fontSize: 12, color: scheme.onSurfaceVariant),
-                        ),
-                        const SizedBox(height: 6),
-                        StreakBadge(
-                          current: stats?.current ?? 0,
-                          best: stats?.best ?? 0,
-                        ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 10),
+                      StreakBadge(current: stats.current, best: stats.best),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 56,
-                    height: 56,
-                    child: MediaThumbnail(
-                      relativePath: latest?.mediaUrl,
-                      mediaType: latest?.mediaType ?? MediaType.none,
-                      iconSize: 22,
-                    ),
-                  ),
-                ],
-              ),
-              if (!journey.isOpenEnded) ...[
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: journey.progressOn(DateTime.now())),
-                          duration: const Duration(milliseconds: 500),
-                          builder: (context, value, _) => LinearProgressIndicator(
-                            value: value,
-                            minHeight: 6,
-                          ),
+                  if (!journey.isOpenEnded) ...[
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: TweenAnimationBuilder<double>(
+                        tween: Tween(
+                          begin: 0,
+                          end: journey.progressOn(DateTime.now()),
+                        ),
+                        duration: const Duration(milliseconds: 500),
+                        builder: (context, value, _) =>
+                            LinearProgressIndicator(
+                          value: value,
+                          minHeight: 6,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(height: 4),
                     Text(
-                      'Day ${journey.dayNumberOn(DateTime.now()).clamp(1, journey.durationDays!)}/${journey.durationDays} · $count moments',
+                      'Day ${journey.dayNumberOn(DateTime.now()).clamp(1, journey.durationDays!)}/${journey.durationDays} · ${timeline.countOf(journey.id)} moments',
                       style: TextStyle(fontSize: 10, color: scheme.outline),
                     ),
-                  ],
-                ),
-              ] else
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Day ${journey.dayNumberOn(DateTime.now())} · $count moments',
-                    style: TextStyle(fontSize: 10, color: scheme.outline),
-                  ),
-                ),
-            ],
-          ),
+                  ] else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: Text(
+                        'Day ${journey.dayNumberOn(DateTime.now())} · ${timeline.countOf(journey.id)} moments',
+                        style: TextStyle(fontSize: 10, color: scheme.outline),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
+  Widget _buildBanner(
+    BuildContext context,
+    Journey journey,
+    RecordEntry? latest,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final preview = _preview;
+    return SizedBox(
+      height: 200,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (preview != null && preview.value.isInitialized)
+            VideoPlayer(preview)
+          else
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    scheme.primaryContainer,
+                    scheme.tertiaryContainer,
+                  ],
+                ),
+              ),
+              alignment: Alignment.center,
+              child: latest != null
+                  ? SizedBox(
+                      width: 120,
+                      height: 120,
+                      child: MediaThumbnail(
+                        relativePath: latest.mediaUrl,
+                        mediaType: latest.mediaType,
+                        iconSize: 34,
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(journey.category.emoji,
+                            style: const TextStyle(fontSize: 44)),
+                        const SizedBox(height: 8),
+                        const Text('Start the story',
+                            style: TextStyle(fontSize: 12)),
+                      ],
+                    ),
+            ),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, Colors.black54],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                journey.isOpenEnded
+                    ? 'Day ${journey.dayNumberOn(DateTime.now())}'
+                    : 'Day ${journey.dayNumberOn(DateTime.now()).clamp(1, journey.durationDays!)}/${journey.durationDays}',
+                style: const TextStyle(color: Colors.white, fontSize: 11),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 10,
+            bottom: 10,
+            child: FilledButton.icon(
+              onPressed: _recordToday,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+              ),
+              icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+              label: const Text('Record today',
+                  style: TextStyle(fontSize: 12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _confirmDelete(BuildContext context) async {
-    final state = context.read<AppState>();
+    final journeys = context.read<JourneyController>();
+    final journey = widget.journey;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -273,8 +424,8 @@ class _JourneyCard extends StatelessWidget {
         ],
       ),
     );
-    if (confirmed == true) {
-      await state.deleteJourney(journey.id);
+    if (confirmed == true && mounted) {
+      await journeys.deleteJourney(journey.id);
     }
   }
 }

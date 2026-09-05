@@ -123,7 +123,11 @@ class LocalBackend implements Backend {
   }
 
   @override
-  Future<void> addRecord(RecordEntry record, {XFile? mediaFile}) async {
+  Future<void> addRecord(
+    RecordEntry record, {
+    XFile? mediaFile,
+    double? videoTrimSeconds,
+  }) async {
     var entry = record;
     if (mediaFile != null) {
       entry = entry.copyWith(
@@ -220,6 +224,9 @@ class LocalBackend implements Backend {
   @override
   Future<File?> resolveMedia(RecordEntry record) =>
       MediaService.resolve(record.mediaUrl);
+
+  @override
+  Future<File?> resolveMediaKey(String key) => MediaService.resolve(key);
 
   @override
   Future<void> deleteMedia(RecordEntry record) =>
